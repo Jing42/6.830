@@ -13,7 +13,7 @@ public class StringAggregator implements Aggregator {
      * @param gbfieldtype the type of the group by field (e.g., Type.INT_TYPE), or null if there is no grouping
      * @param afield the 0-based index of the aggregate field in the tuple
      * @param what aggregation operator to use -- only supports COUNT
-     * @throws IllegalArgumentException if what != COUNT
+     * @throws IllegalArgumentException if what != COUNT 
      */
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {

@@ -90,12 +90,12 @@ public class HeapFileReadTest extends SimpleDbTestBase {
             fail("expected exception");
         } catch (NoSuchElementException e) {
         }
-
         it.open();
         int count = 0;
         while (it.hasNext()) {
             assertNotNull(it.next());
             count += 1;
+            System.out.println(count);
         }
         assertEquals(3, count);
         it.close();

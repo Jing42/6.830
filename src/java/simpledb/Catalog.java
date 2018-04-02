@@ -22,8 +22,25 @@ public class Catalog {
      * Constructor.
      * Creates a new, empty catalog.
      */
+	class CatalogTable {
+		int id;
+		String name;
+		TupleDesc tuple;
+		String pkeyField;
+		DbFile file;
+		CatalogTable(int id, String name, TupleDesc tuple, String pkeyField, DbFile file) {
+			this.id = id;
+			this.name = name;
+			this.tuple = tuple;
+			this.pkeyField = pkeyField;
+			this.file = file;
+		}
+	}
+	
+	private List<CatalogTable> cg;
     public Catalog() {
         // some code goes here
+    	cg = new ArrayList<CatalogTable>();
     }
 
     /**
@@ -37,6 +54,14 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+    	try {
+    		delTable(file.getId());
+    		int i = getTableId(name);
+    		delTable(i);
+    	} catch (NoSuchElementException e) {
+    	} finally {
+    		cg.add(new CatalogTable(file.getId(), name, file.getTupleDesc(), pkeyField, file));
+    	}
     }
 
     public void addTable(DbFile file, String name) {
@@ -53,6 +78,15 @@ public class Catalog {
     public void addTable(DbFile file) {
         addTable(file, (UUID.randomUUID()).toString());
     }
+    
+    private void delTable(int id) {
+    	for (CatalogTable i: cg) {
+    		if (i.id == id) {
+    			cg.remove(i);
+    			return;
+    		}
+    	}
+    }
 
     /**
      * Return the id of the table with a specified name,
@@ -60,7 +94,12 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+    	for (CatalogTable i: cg) {
+    		if (i.name.equals(name)) {
+    			return i.id;
+    		}
+    	}
+        throw new NoSuchElementException();
     }
 
     /**
@@ -71,7 +110,12 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+    	for (CatalogTable i: cg) {
+    		if (i.id == tableid) {
+    			return i.tuple;
+    		}
+    	}
+    	throw new NoSuchElementException();
     }
 
     /**
@@ -82,27 +126,55 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+    	for (CatalogTable i: cg) {
+    		if (i.id == tableid) {
+    			return i.file;
+    		}
+    	}
+    	throw new NoSuchElementException();
     }
 
-    public String getPrimaryKey(int tableid) {
+    public String getPrimaryKey(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+    	for (CatalogTable i: cg) {
+    		if (i.id == tableid) {
+    			return i.pkeyField;
+    		}
+    	}
+    	throw new NoSuchElementException();
     }
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+    	return new Iterator<Integer>() {
+        	private int i;
+        	
+        	@Override
+        	public boolean hasNext() {
+        		return i < cg.size();
+        	}
+        	
+        	@Override
+        	public Integer next() {
+        		if (!hasNext()) throw new NoSuchElementException();
+        		i ++;
+        		return cg.get(i).id;
+        	}
+        };
     }
 
-    public String getTableName(int id) {
-        // some code goes here
-        return null;
+    public String getTableName(int id) throws NoSuchElementException {
+    	for (CatalogTable i: cg) {
+    		if (i.id == id) {
+    			return i.name;
+    		}
+    	}
+    	throw new NoSuchElementException();
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
-        // some code goes here
+        cg.clear();
     }
     
     /**
