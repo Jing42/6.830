@@ -10,6 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import simpledb.systemtest.SimpleDbTestBase;
+import sun.security.provider.Sun;
 
 public class IntegerAggregatorTest extends SimpleDbTestBase {
 
@@ -78,9 +79,9 @@ public class IntegerAggregatorTest extends SimpleDbTestBase {
     }
   }
 
-  /**
-   * Test IntegerAggregator.mergeTupleIntoGroup() and iterator() over a min
-   */
+//  /**
+//   * Test IntegerAggregator.mergeTupleIntoGroup() and iterator() over a min
+//   */
   @Test public void mergeMin() throws Exception {
     scan1.open();
     IntegerAggregator agg = new IntegerAggregator(0,Type.INT_TYPE,  1, Aggregator.Op.MIN);

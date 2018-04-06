@@ -29,6 +29,7 @@ public class EvictionTest extends SimpleDbTestBase {
         TransactionId tid = new TransactionId();
         SeqScan scan = new SeqScan(tid, f.getId(), "");
         scan.open();
+        int x = 0;
         while (scan.hasNext()) {
             scan.next();
         }

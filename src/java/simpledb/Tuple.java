@@ -57,6 +57,7 @@ public class Tuple implements Serializable {
         // some code goes here
     	this.rid = rid;
     }
+    
 
     /**
      * Change the value of the ith field of this tuple.

@@ -1,12 +1,33 @@
 package simpledb;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.NoSuchElementException;
+
+import simpledb.Aggregator.Op;
+
 /**
  * Knows how to compute some aggregate over a set of StringFields.
  */
 public class StringAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
-
+    
+    private int gbfield, afield;
+    private Type gbfieldtype;
+    private Op what;
+    private List<Pair> contents;
+    
+    class Pair {
+    	Field gpb;
+    	String res;
+    	int count;
+    	
+    	Pair(Field a1) {
+    		gpb = a1;
+    		count = 0;
+    	}
+    }
     /**
      * Aggregate constructor
      * @param gbfield the 0-based index of the group-by field in the tuple, or NO_GROUPING if there is no grouping
@@ -18,6 +39,12 @@ public class StringAggregator implements Aggregator {
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         // some code goes here
+    	if (what != Op.COUNT) throw new IllegalArgumentException();
+    	this.gbfield = gbfield;
+    	this.afield = afield;
+    	this.what = what;
+    	this.gbfieldtype = gbfieldtype;
+    	this.contents = new ArrayList<Pair>();
     }
 
     /**
@@ -26,6 +53,24 @@ public class StringAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
+    	int idx = 0;
+    	if (gbfield != NO_GROUPING) {
+    		Field gp = tup.getField(gbfield);
+    		for (Pair i: contents) {
+        		if (i.gpb.equals(gp)) {
+        			break;
+        		}
+        		idx++;
+        	}
+        	if (idx == contents.size()) {
+        		contents.add(new Pair(gp));
+        	}
+    	} else {
+    		if (contents.size() == 0) {
+    			contents.add(new Pair(null));
+    		}
+    	}
+    	contents.get(idx).count++;
     }
 
     /**
@@ -38,7 +83,45 @@ public class StringAggregator implements Aggregator {
      */
     public OpIterator iterator() {
         // some code goes here
-        throw new UnsupportedOperationException("please implement me for lab2");
+    	 return new OpIterator() {
+        	int i = -1;
+        	public void open()
+        		      throws DbException, TransactionAbortedException {
+        		i = 0;
+        		
+        	}
+        	public boolean hasNext() throws DbException, TransactionAbortedException {
+        		if (i < 0 || i >= contents.size()) {
+        			return false;
+        		}
+        		return true;
+        	}
+        	public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+        		if (!hasNext()) throw new NoSuchElementException();
+        		Tuple res = new Tuple(getTupleDesc());
+        		if (gbfield != NO_GROUPING) {
+	        		res.setField(0, contents.get(i).gpb);
+	        		res.setField(1, new IntField(contents.get(i).count));
+        		} else {
+        			res.setField(0, new IntField(contents.get(i).count));
+        		}
+        		i++;
+        		return res;
+        	}
+        	public void rewind() throws DbException, TransactionAbortedException {
+        		i = 0;
+        	}
+        	public TupleDesc getTupleDesc() {
+        		if (gbfield != NO_GROUPING) {
+        			return new TupleDesc(new Type[]{gbfieldtype, Type.INT_TYPE});
+        		} else {
+        			return new TupleDesc(new Type[] {Type.INT_TYPE});
+        		}
+        	}
+        	public void close() {
+        		i = -1;
+        	}
+        };
     }
 
 }

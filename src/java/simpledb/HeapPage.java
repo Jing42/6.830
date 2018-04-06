@@ -21,6 +21,7 @@ public class HeapPage implements Page {
 
     byte[] oldData;
     private final Byte oldDataLock=new Byte((byte)0);
+    private TransactionId dirty;
 
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
@@ -243,6 +244,11 @@ public class HeapPage implements Page {
     public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+    	int i = t.getRecordId().getTupleNumber();
+		if (!isSlotUsed(i)) throw new DbException("Delete a nonexist tuple!");
+		if (t.getRecordId().getPageId() != pid) throw new DbException("Delete a nonexist tuple!");
+		markSlotUsed(i, false);
+		return;
     }
 
     /**
@@ -255,6 +261,16 @@ public class HeapPage implements Page {
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
         // not necessary for lab1
+    	if (getNumEmptySlots() == 0) throw new DbException("No Vacancy!");
+    	if (!t.getTupleDesc().equals(td)) throw new DbException("TupleDesc mismatch!");
+    	for (int i = 0; i < getNumTuples(); i++) {
+    		if (!isSlotUsed(i)) {
+    			tuples[i] = t;
+    			t.setRecordId(new RecordId(pid, i));
+    			markSlotUsed(i, true);
+    			return;
+    		}
+    	}
     }
 
     /**
@@ -264,6 +280,11 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
 	// not necessary for lab1
+    	if (!dirty) {
+    		this.dirty = null;
+    		return;
+    	}
+    	this.dirty = tid;
     }
 
     /**
@@ -272,7 +293,7 @@ public class HeapPage implements Page {
     public TransactionId isDirty() {
         // some code goes here
 	// Not necessary for lab1
-        return null;      
+        return dirty;      
     }
 
     /**
@@ -298,10 +319,6 @@ public class HeapPage implements Page {
     		return false;
     	}
     	int m = i / 8, n = i % 8;
-    	if (m >= header.length) {
-    		System.out.println(i);
-    		System.out.println(getNumTuples());
-    	}
     	byte b = header[m];
         return (1 << n & b) != 0;
     }
@@ -312,6 +329,13 @@ public class HeapPage implements Page {
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
         // not necessary for lab1
+    	if (i >= getNumTuples()) return;
+    	int m = i / 8, n = i % 8;
+    	if (value) {
+    		header[m] |= (1 << n);
+    	} else {
+    		header[m] &= (~(1 << n));
+    	}
     }
 
     /**

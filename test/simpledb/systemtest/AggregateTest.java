@@ -15,7 +15,6 @@ public class AggregateTest extends SimpleDbTestBase {
         TransactionId tid = new TransactionId();
         SeqScan ss = new SeqScan(tid, table.getId(), "");
         Aggregate ag = new Aggregate(ss, aggregateColumn, groupColumn, operation);
-
         SystemTestUtil.matchTuples(ag, expectedResult);
         Database.getBufferPool().transactionComplete(tid);
     }
@@ -83,7 +82,6 @@ public class AggregateTest extends SimpleDbTestBase {
         // Compute the expected answer
         ArrayList<ArrayList<Integer>> expected =
                 aggregate(createdTuples, operation, 1, groupColumn);
-
         // validate that we get the answer
         validateAggregate(table, operation, 1, groupColumn, expected);
     }

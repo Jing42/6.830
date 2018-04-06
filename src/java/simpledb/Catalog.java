@@ -157,8 +157,7 @@ public class Catalog {
         	@Override
         	public Integer next() {
         		if (!hasNext()) throw new NoSuchElementException();
-        		i ++;
-        		return cg.get(i).id;
+        		return cg.get(i++).id;
         	}
         };
     }
