@@ -195,7 +195,8 @@ public class HeapFile implements DbFile {
         		return current.next();
 	    	}
 	    	public void rewind() throws DbException, TransactionAbortedException {
-	    		
+	    		close();
+	    		open();
 	    	}
 	    	public void close() {
 	    		current = null;

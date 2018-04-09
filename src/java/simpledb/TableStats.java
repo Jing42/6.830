@@ -1,5 +1,7 @@
 package simpledb;
 
+import java.io.RandomAccessFile;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -65,7 +67,12 @@ public class TableStats {
      * histograms.
      */
     static final int NUM_HIST_BINS = 100;
-
+    
+    private Object[] hist;
+    private int[] min, max;
+    private int ioCostPerPage;
+    private TupleDesc td;
+    private int count;
     /**
      * Create a new TableStats object, that keeps track of statistics on each
      * column of a table
@@ -85,6 +92,49 @@ public class TableStats {
         // necessarily have to (for example) do everything
         // in a single scan of the table.
         // some code goes here
+    	DbFile f = Database.getCatalog().getDatabaseFile(tableid);
+    	td = f.getTupleDesc();
+    	hist = new Object[td.numFields()];
+    	min = new int[td.numFields()];
+    	Arrays.fill(min, Integer.MAX_VALUE);
+    	max = new int[td.numFields()];
+    	Arrays.fill(max, Integer.MIN_VALUE);
+    	this.ioCostPerPage = ioCostPerPage;
+    	DbFileIterator it = f.iterator(new TransactionId());
+    	try {
+    		it.open();
+			while (it.hasNext()) {
+				count ++;
+				Tuple t = it.next();
+				for (int i = 0; i < td.numFields(); i++) {
+					if (td.getFieldType(i) == Type.INT_TYPE) {
+						int v = ((IntField)t.getField(i)).getValue();
+						if (v < min[i]) min[i] = v;
+						if (v > max[i]) max[i] = v;
+					}
+				}
+			}
+			for (int i = 0; i < td.numFields(); i++) {
+	    		if (td.getFieldType(i) == Type.INT_TYPE) {
+	    			hist[i] = new IntHistogram(NUM_HIST_BINS, min[i], max[i]);
+	    		} else {
+	    			hist[i] = new StringHistogram(NUM_HIST_BINS);
+	    		}
+	    	}
+			it.rewind();
+			while (it.hasNext()) {
+				Tuple t = it.next();
+				for (int i = 0; i < td.numFields(); i++) {
+					if (hist[i] instanceof IntHistogram) {
+						((IntHistogram)hist[i]).addValue(((IntField)t.getField(i)).getValue());
+					} else {
+						((StringHistogram)hist[i]).addValue(((StringField)t.getField(i)).getValue());
+					}
+				}
+			}
+			
+		} catch (Exception e) {
+		}
     }
 
     /**
@@ -101,7 +151,7 @@ public class TableStats {
      */
     public double estimateScanCost() {
         // some code goes here
-        return 0;
+        return (double)ioCostPerPage / BufferPool.getPageSize() / td.getSize() * count ;
     }
 
     /**
@@ -115,7 +165,7 @@ public class TableStats {
      */
     public int estimateTableCardinality(double selectivityFactor) {
         // some code goes here
-        return 0;
+        return (int)(selectivityFactor * count);
     }
 
     /**
@@ -148,7 +198,13 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
         // some code goes here
-        return 1.0;
+    	if (td.getFieldType(field) == Type.INT_TYPE) {
+    		IntHistogram hst = (IntHistogram)hist[field];
+    		return hst.estimateSelectivity(op, ((IntField)constant).getValue());
+    	} else {
+    		StringHistogram hst = (StringHistogram)hist[field];
+    		return hst.estimateSelectivity(op, ((StringField)constant).getValue());
+    	}
     }
 
     /**

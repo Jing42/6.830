@@ -2,8 +2,11 @@ package simpledb;
 
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
-public class IntHistogram {
+public class IntHistogram{
 
+	
+	private double  min, max, ntuples, width;
+	private int[] contents;
     /**
      * Create a new IntHistogram.
      * 
@@ -22,6 +25,11 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
     	// some code goes here
+    	this.min = min;
+    	this.max = max;
+    	ntuples = 0;
+    	width = (max - min + 1.0) / buckets;
+    	contents = new int[buckets];
     }
 
     /**
@@ -30,6 +38,9 @@ public class IntHistogram {
      */
     public void addValue(int v) {
     	// some code goes here
+    	int idx = (int)((v - min) / width);
+    	contents[idx]++;
+    	ntuples++;
     }
 
     /**
@@ -43,9 +54,62 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
-
     	// some code goes here
-        return -1.0;
+    	if (v > max || v < min) {
+    		switch (op) {
+    		case NOT_EQUALS:
+    			return 1;
+    		case EQUALS: 
+    			return 0;
+    		case LESS_THAN:
+    		case LESS_THAN_OR_EQ:
+    			return v > max ? 1 : 0;
+    		case GREATER_THAN:
+    		case GREATER_THAN_OR_EQ:
+    			return v > max ? 0 : 1;
+    		}
+    	}
+    	
+    	int idx = (int)((v - min) / width);
+    	double height = contents[idx];
+    	double bucketMin = min + width * idx;
+    	double bucketMax = bucketMin + width;
+    	double wi = Math.max(width, 1);
+    	switch (op) {
+    	case GREATER_THAN:
+    		double sum = 0;
+    		for (int i = idx + 1; i < contents.length; i++) {
+    			sum += contents[i];
+    		}
+    		sum += height * (bucketMax - v) / width;
+    		return sum / ntuples; 
+    	case EQUALS:
+    		return height / wi / ntuples;
+    	case LESS_THAN:
+    		sum = 0;
+    		for (int i = idx - 1; i > -1; i--) {
+    			sum += contents[i];
+    		}
+    		sum += height * (v - bucketMin) / width;
+    		return sum / ntuples;
+    	case LESS_THAN_OR_EQ:
+    		sum = 0;
+    		for (int i = idx - 1; i > -1; i--) {
+    			sum += contents[i];
+    		}
+    		sum += height * (v - bucketMin) / width;
+    		return Math.min(1, sum / ntuples + height / wi / ntuples) ;
+    	case GREATER_THAN_OR_EQ:
+    		sum = 0;
+    		for (int i = idx + 1; i < contents.length; i++) {
+    			sum += contents[i];
+    		}
+    		sum += height * (bucketMax - v) / width;
+    		return Math.min(1, sum / ntuples + height / wi / ntuples);
+    	case NOT_EQUALS:
+    		return 1 - height / wi / ntuples;
+    	}
+    	return 1;
     }
     
     /**

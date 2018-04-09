@@ -5,6 +5,8 @@ import java.util.*;
 import javax.swing.*;
 import javax.swing.tree.*;
 
+import com.sun.media.sound.PCMtoPCMCodec;
+
 /**
  * The JoinOptimizer class is responsible for ordering a series of joins
  * optimally, and for selecting the best instantiation of a join for a given
@@ -111,7 +113,7 @@ public class JoinOptimizer {
             // HINT: You may need to use the variable "j" if you implemented
             // a join algorithm that's more complicated than a basic
             // nested-loops join.
-            return -1.0;
+            return cost1 + card1 * cost2 + card1 * card2;
         }
     }
 
@@ -157,6 +159,21 @@ public class JoinOptimizer {
             Map<String, Integer> tableAliasToId) {
         int card = 1;
         // some code goes here
+        if (joinOp != Predicate.Op.EQUALS) {
+        	return card1 * card2;
+        }
+        if (!(t1pkey || t2pkey)) {
+        	return Math.max(card1, card2);
+        }
+        if (t1pkey && t2pkey) {
+        	return Math.max(card1, card2);
+        }
+        if (t1pkey) {
+        	return card2;
+        }
+        if (t2pkey) {
+        	return card1;
+        }
         return card <= 0 ? 1 : card;
     }
 
@@ -221,7 +238,24 @@ public class JoinOptimizer {
 
         // some code goes here
         //Replace the following
-        return joins;
+    	PlanCache pc = new PlanCache();
+    	for (int i = 1; i <= joins.size(); i++) {
+    		for (Set<LogicalJoinNode> s: enumerateSubsets(joins, i)) {
+    			double bestCost = Double.MAX_VALUE;
+    			for (LogicalJoinNode sp: s) {
+    				CostCard cc = computeCostAndCardOfSubplan(stats,
+    						filterSelectivities, sp, s, bestCost, pc);
+    				if (cc != null && cc.cost < bestCost) {
+    					bestCost = cc.cost;
+    					pc.addPlan(s, cc.cost, cc.card, cc.plan);
+    				}
+    			}
+    		}
+    	}
+    	if (explain) {
+    		printJoins(pc.getOrder(new HashSet<LogicalJoinNode>(joins)), pc, stats, filterSelectivities);
+    	}
+        return pc.getOrder(new HashSet<LogicalJoinNode>(joins));
     }
 
     // ===================== Private Methods =================================
