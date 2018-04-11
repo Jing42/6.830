@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * HeapFile is an implementation of a DbFile that stores a collection of tuples
@@ -17,6 +18,7 @@ public class HeapFile implements DbFile {
 
 	private File f;
 	private TupleDesc td;
+	private ReentrantLock lock;
 	
     /**
      * Constructs a heap file backed by the specified file.
@@ -29,6 +31,7 @@ public class HeapFile implements DbFile {
         // some code goes here
     	this.f = f;
     	this.td = td;
+    	lock = new ReentrantLock();
     }
 
     /**
@@ -40,6 +43,7 @@ public class HeapFile implements DbFile {
         // some code goes here
         return f;
     }
+    
 
     /**
      * Returns an ID uniquely identifying this HeapFile. Implementation note:
@@ -118,20 +122,27 @@ public class HeapFile implements DbFile {
         	throw new DbException("Tuple can not be added!");
         }
         ArrayList<Page> res = new ArrayList<Page>();
+        HeapPage p = null;
     	for (int i = 0; i < numPages(); i++) {
     		try {
-    			HeapPage p = (HeapPage)Database.getBufferPool().getPage(tid, new HeapPageId(getId(), i), 
-    					Permissions.READ_WRITE);
-    			p.insertTuple(t);
-    			res.add(p);
-    			return res;
-    		} catch (Exception e) {}
+				p = (HeapPage)Database.getBufferPool().getPage(tid, new HeapPageId(getId(), i), 
+						Permissions.READ_WRITE);
+				p.insertTuple(t);
+				res.add(p);
+				return res;
+    		} catch (Exception e) { 
+//    			if (p != null) {
+//    				Database.getBufferPool().tLock.xUnLock(tid, p.getId());
+//    			}
+    		}
     	}
     	try {
+    		lock.lock();
     		RandomAccessFile rf = new RandomAccessFile(f, "rw");
     		rf.setLength(rf.length() + BufferPool.getPageSize());
-    		HeapPage p = (HeapPage)Database.getBufferPool().getPage(tid, new HeapPageId(getId(), numPages()-1), 
+    		p = (HeapPage)Database.getBufferPool().getPage(tid, new HeapPageId(getId(), numPages()-1), 
 					Permissions.READ_WRITE);
+    		lock.unlock();
     		p.insertTuple(t);
     		res.add(p);
     		rf.close();
@@ -144,14 +155,19 @@ public class HeapFile implements DbFile {
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
         // some code goes here
+    	HeapPage p = null;
     	ArrayList<Page> res = new ArrayList<Page>();
 		try {
-			HeapPage p = (HeapPage)Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(), 
+			p = (HeapPage)Database.getBufferPool().getPage(tid, t.getRecordId().getPageId(), 
 					Permissions.READ_WRITE);
 			p.deleteTuple(t);
 			res.add(p);
 			return res;
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			if (p != null) {
+				Database.getBufferPool().tLock.xUnLock(tid, p.getId());
+			}
+		}
     	if (res.isEmpty()) {
     		throw new DbException("This tuple can't be deleted!");
     	}

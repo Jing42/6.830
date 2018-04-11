@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,6 +30,8 @@ public class BufferPool {
     private int numPages;
     private Page[] pages;
     private Random rand;
+    ConcurrentHashMap<TransactionId, HashSet<PageId>> transPages;
+    TransLock tLock;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -40,6 +43,8 @@ public class BufferPool {
     	this.numPages = numPages;
     	pages = new Page[numPages];
     	rand = new Random();
+    	tLock = new TransLock();
+    	transPages = new ConcurrentHashMap<TransactionId, HashSet<PageId>>();
     }
     
     public static int getPageSize() {
@@ -50,6 +55,7 @@ public class BufferPool {
     public static void setPageSize(int pageSize) {
     	BufferPool.pageSize = pageSize;
     }
+    
     
     // THIS FUNCTION SHOULD ONLY BE USED FOR TESTING!!
     public static void resetPageSize() {
@@ -74,6 +80,11 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
             // some code goes here
+	    	if (perm == Permissions.READ_ONLY) {
+	    		tLock.sLock(tid, pid);
+	    	} else if(perm == Permissions.READ_WRITE) {
+	    		tLock.xLock(tid, pid);
+	    	}
         	int vacancy = -1;
         	while (vacancy == -1) {
     	    	for (int i=0; i < pages.length; i++) {
@@ -95,6 +106,8 @@ public class BufferPool {
         	return page;
         }
 
+ 
+    
     /**
      * Releases the lock on a page.
      * Calling this is very risky, and may result in wrong behavior. Think hard
@@ -107,6 +120,8 @@ public class BufferPool {
     public  void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+    	tLock.sUnLock(tid, pid);
+    	tLock.xUnLock(tid, pid);
     }
 
     /**
@@ -117,15 +132,15 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+    	transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+    	return tLock.hasLock(tid, p);
     }
-
     /**
      * Commit or abort a given transaction; release all locks associated to
      * the transaction.
@@ -137,6 +152,26 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+    	if (commit) {
+    		flushPages(tid);
+    	} else {
+    		if (transPages.containsKey(tid)) {
+	    		for (PageId pid: transPages.get(tid)) {
+	    			DbFile dbfile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+	    			Page page = dbfile.readPage(pid);
+	    			for (int i = 0; i < pages.length; i++) {
+	    				if (pages[i].getId() == pid) {
+	    					pages[i] = page;
+	    					break;
+	    				}    				
+	    			}
+	    		}
+    		}
+    	}
+    	if (transPages.containsKey(tid)) {
+    		transPages.get(tid).clear();
+    	}
+    	tLock.clearTransLock(tid);
     }
 
     /**
@@ -161,8 +196,7 @@ public class BufferPool {
     	DbFile dbfile = Database.getCatalog().getDatabaseFile(tableId);
     	ArrayList<Page> res = dbfile.insertTuple(tid, t);
     	for (Page i: res) {
-    		((HeapPage)i).markDirty(true, tid);
-    		pages[getPage(tid, i.getId(), Permissions.READ_WRITE).getId().getPageNumber()] = i;
+    		i.markDirty(true, tid);
     	}
     }
 
@@ -186,8 +220,7 @@ public class BufferPool {
     	DbFile dbfile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
     	ArrayList<Page> res = dbfile.deleteTuple(tid, t);
     	for (Page i: res) {
-    		((HeapPage)i).markDirty(true, tid);
-    		pages[getPage(tid, i.getId(), Permissions.READ_WRITE).getId().getPageNumber()] = i;
+    		i.markDirty(true, tid);
     	}
     }
 
@@ -200,6 +233,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
     	for (Page i: pages) {
+    		if (i == null) continue;
     		flushPage(i.getId());
     	}
     }
@@ -231,8 +265,13 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
     	DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
-    	f.writePage(f.readPage(pid));
+    	for (Page p: pages) {
+    		if (p != null && p.getId() == pid) {
+    			f.writePage(p);
+    		}
+    	}
     	f.readPage(pid).markDirty(false, null);
+    	tLock.clearPageLock(pid);
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -240,6 +279,11 @@ public class BufferPool {
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+    	if (transPages.containsKey(tid)) {
+    		for (PageId pid: transPages.get(tid)) {
+    			flushPage(pid);
+    		}
+    	}
     }
 
     /**
@@ -249,9 +293,17 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+    	int count = 0;
+    	int n = rand.nextInt(numPages);
     	while (true) {
-    		int n = rand.nextInt(numPages);
-    		if (pages[n] == null) continue;
+    		if (count > pages.length) {
+    			throw new DbException("All pages are dirty, can't evict!");
+    		}
+    		count ++;
+    		n++;
+    		n %= pages.length;
+    		if (pages[n] == null) return; 
+    		if ((pages[n].isDirty() != null)) continue;
     		try {
 				flushPage(pages[n].getId());
 			} catch (Exception e) {

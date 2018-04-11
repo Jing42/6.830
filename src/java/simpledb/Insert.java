@@ -82,11 +82,12 @@ public class Insert extends Operator {
     	}
     	int res = 0;
     	while (child.hasNext()) {
-	    	try {
+			try {
 				Database.getBufferPool().insertTuple(t, tableId, child.next());
-				res++;
-			} catch (Exception e) {
-			} 
+			} catch (NoSuchElementException e) {
+			} catch (IOException e) {
+			}
+			res++;
     	}
     	Tuple t = new Tuple(getTupleDesc());
     	t.setField(0, new IntField(res));

@@ -1,6 +1,7 @@
 package simpledb;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.io.*;
 
 /**
@@ -280,6 +281,14 @@ public class HeapPage implements Page {
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
 	// not necessary for lab1
+    	if (tid != null) {
+	    	ConcurrentHashMap<TransactionId, HashSet<PageId>> transPages = 
+	    			Database.getBufferPool().transPages;
+	    	if (!transPages.containsKey(tid)) transPages.put(tid, new HashSet<PageId>());
+	    	if (dirty) {
+	    		transPages.get(tid).add(this.getId());
+	    	}
+    	}
     	if (!dirty) {
     		this.dirty = null;
     		return;
